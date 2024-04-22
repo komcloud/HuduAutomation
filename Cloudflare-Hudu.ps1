@@ -36,95 +36,101 @@ $Layout = Get-HuduAssetLayouts -name $HuduAssetLayoutName
 
 if (!$Layout) { 
 	$AssetLayoutFields = @(
-        @{
-			label = 'Link'
+       		 @{
+			label = 'Changes'
 			field_type = 'RichText'
 			show_in_list = 'false'
 			position = 1
+		},
+        	@{
+			label = 'Link'
+			field_type = 'RichText'
+			show_in_list = 'false'
+			position = 2
 		},
 		@{
 			label = 'Status'
 			field_type = 'Text'
 			show_in_list = 'true'
-			position = 2
+			position = 3
 		},
 		@{
 			label = 'Name Servers'
 			field_type = 'RichText'
 			show_in_list = 'false'
-			position = 3
+			position = 4
 		},
 		@{
 			label = 'Original Name Servers'
 			field_type = 'RichText'
 			show_in_list = 'false'
-			position = 4
+			position = 5
 		},
 		@{
 			label = 'Original Registrar'
 			field_type = 'RichText'
 			show_in_list = 'false'
-			position = 5
+			position = 6
 		},
 		@{
 			label = 'Modified On'
 			field_type = 'Date'
 			show_in_list = 'true'
-			position = 6
+			position = 7
 		},
 		@{
 			label = 'Account'
 			field_type = 'Text'
 			show_in_list = 'true'
-			position = 7
+			position = 8
 		},
 		@{
 			label = 'Plan'
 			field_type = 'Text'
 			show_in_list = 'true'
-			position = 8
+			position = 9
 		},
 		@{
 			label = 'Plan Cost'
 			field_type = 'Text'
 			show_in_list = 'true'
-			position = 9
+			position = 10
 		},
 		@{
 			label = 'DNSSEC Status'
 			field_type = 'Text'
 			show_in_list = 'true'
-			position = 10
+			position = 11
 		},
 		@{
 			label = 'DNS Records'
 			field_type = 'RichText'
 			show_in_list = 'true'
-			position = 11
+			position = 12
 		},
 		@{
 			label = 'Zone Settings'
 			field_type = 'RichText'
 			show_in_list = 'true'
-			position = 12
+			position = 13
 		},
 		@{
 			label = 'Firewall Rules'
 			field_type = 'RichText'
 			show_in_list = 'true'
-			position = 13
+			position = 14
 		},
 		@{
 			label = 'Page Rules'
 			field_type = 'RichText'
 			show_in_list = 'true'
-			position = 14
+			position = 15
 		},
 		@{
 			label = 'BIND File'
 			field_type = 'RichText'
 			show_in_list = 'true'
-			position = 14
+			position = 16
 		}
 	)
 	
@@ -144,6 +150,12 @@ $Zones = Get-CloudFlarePage -URI "$BaseURL/zones"
 
 [System.Collections.Generic.List[PSCustomObject]]$UnmatchedZones = @()
 
+# Getting the date for filtering later on
+$CurrentDate = Get-Date
+$ThirtyDaysAgo = $CurrentDate.AddDays(-30)
+Write-Host "Current Date: $CurrentDate"
+Write-Host "Date 30 Days Ago: $ThirtyDaysAgo"
+
 foreach ($Zone in $Zones) {
     try {
         if ($Zone.name -in $ParsedSites) {
@@ -157,7 +169,9 @@ foreach ($Zone in $Zones) {
 
                 $ZoneSettings = Get-CloudFlarePage -URI "$BaseURL/zones/$($Zone.ID)/settings"
                 $ZoneSettingsHTML = $ZoneSettings | Select-Object @{N = 'Setting'; E = { $_.id } },@{N = 'Value'; E = { $_.value } },@{N = 'Modified'; E = { $_.modified_on } } | convertto-html -as Table -Fragment | out-string
-        
+
+		$ZoneChanges = $ZoneRecords | Where-Object {$_.modified_on -and ((Get-Date $_.modified_on) -gt $currentDate.AddMonths(-1))} | Select-Object name, type, content, proxiable, ttl, comment, created_on, modified_on | convertto-html -as Table -Fragment | out-String
+	
                 $DNSSec = Get-CloudFlarePage -URI "$BaseURL/zones/$($Zone.ID)/dnssec"
 
                 $FirewallRules = Get-CloudFlarePage -URI "$BaseURL/zones/$($Zone.ID)/firewall/rules" | convertto-html -as Table -Fragment | out-string
@@ -169,6 +183,7 @@ foreach ($Zone in $Zones) {
 				$BindFile = [System.Text.Encoding]::UTF8.GetString($response.Content)
 
                 $AssetFields = @{
+		    'changes' = $ZoneChanges
                     'link' = $CloudflareLink
                     'status' 	= $Zone.status
                     'name_servers'   = $Zone.name_servers -join ', '
@@ -183,7 +198,7 @@ foreach ($Zone in $Zones) {
                     'firewall_rules'   = $FirewallRules
                     'page_rules'   = $PageRules
                     'zone_settings'   = $ZoneSettingsHTML
-					'bind_file' = "<pre>$BindFile</pre>"
+		    'bind_file' = "<pre>$BindFile</pre>"
                 }
 
                 $AssetName = $Zone.name
